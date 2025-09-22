@@ -1,0 +1,17 @@
+[project]
+name = "scipy-community-analysis"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27.0",
+    "pandas>=2.2.0",
+    "matplotlib>=3.8.0",
+    "python-dateutil>=2.9.0.post0",
+    "ipykernel>=6.30.1",
+    "python-dotenv>=1.0.1",
+    "dateparser>=1.2.2",
+    "cloc>=0.2.5",
+    "pypistats>=1.11.0",
+]
