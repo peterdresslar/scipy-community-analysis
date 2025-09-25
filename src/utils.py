@@ -150,7 +150,7 @@ def get_all_repo_prs(owner: str, repo: str, year: Optional[int] = None, search_d
         date_range = f"{start_date}..{end_date}"
 
         print(f"Fetching PRs for {owner}/{repo} in {date_range}")
-        month_prs = list(_iter_search_issues_prs(owner, repo, "pr", date_range))
+        month_prs = list(_iter_search_issues_prs(owner, repo, "pr", search_delay, date_range))
         all_prs.extend(month_prs)
 
         # Add small delay between months
@@ -176,21 +176,83 @@ def get_pr_text(pr: dict) -> str:
 
 
 _SCIENCE_KEYWORDS: Dict[str, List[str]] = {
+    # Core physical sciences and subfields
     "physics": ["physics", "quantum", "relativ", "particle", "optics", "thermo"],
+    "astrophysics": ["astrophys", "star", "galax", "supernova", "exoplanet", "cosmic"],
+    "cosmology": ["cosmolog", "big bang", "cmb", "dark matter", "dark energy"],
+    "electromagnetism": ["electromagnet", "maxwell", "electrostat", "magnetostat", "em field"],
+    "mechanics": ["mechanic", "kinematic", "dynamic", "rigid", "continuum"],
+    "fluid-dynamics": ["fluid", "navier", "stokes", "turbulen", "cfd", "viscous"],
+    "materials-science": ["material", "crystal", "alloy", "polymer", "composite", "microstruct"],
+    "statistical-physics": ["statistical phys", "ising", "boltzmann", "gibbs", "lattice"],
+
+    # Chemistry and related
     "chemistry": ["chem", "molecule", "reaction", "spectroscop", "chromatograph", "nmr"],
-    "biology": ["bio", "genom", "protein", "cell", "dna", "rna", "enzyme"],
-    "neuroscience": ["neuro", "brain", "cortex", "synap", "eeg", "fmri"],
-    "astronomy": ["astro", "cosmic", "galax", "stellar", "planet", "telescope"],
+    "computational-chemistry": ["quantum chem", "dft", "hartree", "gaussian", "mopac"],
+    "cheminformatics": ["cheminform", "smiles", "rdkit", "qsar", "ligand", "dock"],
+
+    # Earth and environmental sciences
     "geoscience": ["geo", "earth", "seism", "climat", "atmos", "ocean", "hydro"],
-    "statistics": ["stat", "regression", "bayes", "anova", "likelihood", "bootstrap"],
-    "machine-learning": ["machine learning", "neural", "svm", "random forest", "xgboost", "deep"],
-    "signal-processing": ["fft", "filter", "wavelet", "signal", "frequency", "spectral"],
-    "optimization": ["optimiz", "gradient", "solver", "minimiz", "l-bfgs", "newton"],
-    "numerical-methods": ["ode", "pde", "integrat", "interpol", "sparse", "eigen", "matrix"],
+    "geology": ["geolog", "stratigraph", "tecton", "sediment", "petrolog"],
+    "meteorology": ["meteorolog", "weather", "precip", "wind", "storm", "forecast"],
+    "oceanography": ["oceanograph", "curren", "salinit", "thermocline", "sea surface"],
+    "hydrology": ["hydrolog", "watershed", "runoff", "streamflow", "aquifer"],
+    "remote-sensing": ["remote sensing", "landsat", "sentinel", "sar", "hyperspectral"],
+    "geospatial": ["gis", "geospatial", "raster", "vector", "geodes", "proj"],
+
+    # Life sciences
+    "biology": ["bio", "genom", "protein", "cell", "dna", "rna", "enzyme"],
+    "bioinformatics": ["bioinform", "fasta", "blast", "alignment", "transcriptom", "proteom"],
+    "ecology": ["ecolog", "ecosystem", "biodivers", "population", "species", "niche"],
+    "evolutionary-biology": ["evolution", "phylogen", "selection", "drift", "mutation"],
+    "population-genetics": ["population genetic", "hardy", "allele", "haplotyp", "coalescent"],
+    "neuroscience": ["neuro", "brain", "cortex", "synap", "eeg", "fmri"],
+    "computational-neuroscience": ["spike", "neuron model", "hodgkin", "izhikevich", "connectom"],
     "medical": ["medic", "clinic", "diagnos", "imaging", "ct", "mri", "health"],
-    "economics": ["econom", "finance", "market", "econometric", "macro", "micro"],
+    "epidemiology": ["epidemiolog", "incidence", "prevalence", "r0", "sero", "contact"],
+
+    # Mathematics and applied math
+    "mathematics": ["mathemat", "algebra", "calculus", "topolog", "analysis"],
+    "linear-algebra": ["linear algebra", "matrix", "eigen", "svd", "lu", "qr"],
+    "numerical-linear-algebra": ["iterative solver", "cg ", "gmres", "bicg", "precondition"],
+    "differential-equations": ["ode", "pde", "bvp", "ivp", "stiff", "finite element"],
+    "time-series": ["time series", "arima", "sarima", "seasonal", "autocorrel", "spectral"],
+    "optimization": ["optimiz", "gradient", "solver", "minimiz", "l-bfgs", "newton"],
+    "convex-optimization": ["convex", "cvx", "kkt", "interior-point", "proximal"],
+    "combinatorial-optimization": ["combinator", "integer", "mixed-integer", "tsp", "knapsack"],
+    "control-systems": ["control", "pid", "state-space", "lqr", "kalman", "observer"],
+    "simulation": ["simulation", "agent-based", "discrete event", "simulator", "modeling"],
+    "monte-carlo": ["monte carlo", "mcmc", "metropolis", "gibbs", "importance sampling"],
+
+    # Statistics and data analysis
+    "statistics": ["stat", "regression", "bayes", "anova", "likelihood", "bootstrap"],
+    "bayesian-statistics": ["bayes", "posterior", "prior", "mcmc", "variational"],
+    "probability": ["probabilit", "stochastic", "markov", "random variable", "distribution"],
+    "hypothesis-testing": ["hypothesis", "p-value", "t-test", "chi-square", "confidence"],
+
+    # ML/AI and subfields
+    "machine-learning": ["machine learning", "neural", "svm", "random forest", "xgboost", "deep"],
+    "deep-learning": ["deep learning", "cnn", "rnn", "transformer", "pytorch", "tensorflow"],
+    "reinforcement-learning": ["reinforcement", "policy", "q-learning", "td", "actor-critic"],
+    "natural-language-processing": ["nlp", "token", "bert", "sentence", "embedding", "llm"],
     "computer-vision": ["image", "vision", "segmentation", "detection", "opencv"],
+    "image-processing": ["image", "denois", "deconvol", "morpholog", "edge", "registration"],
+    "signal-processing": ["fft", "filter", "wavelet", "signal", "frequency", "spectral"],
+    "time-frequency-analysis": ["spectrogram", "stft", "cwt", "wavelet", "hilbert"],
     "audio": ["audio", "speech", "sound", "acoustic", "phoneme"],
+
+    # Information and network sciences
+    "information-theory": ["entropy", "mutual information", "kl", "fano", "shannon"],
+    "graph-theory": ["graph", "node", "edge", "centrality", "clique", "graph cut"],
+    "network-science": ["network", "community", "scale-free", "small-world", "degree"],
+
+    # Social and economic sciences
+    "economics": ["econom", "finance", "market", "econometric", "macro", "micro"],
+    "econometrics": ["econometr", "panel", "instrumental", "gmm", "difference-in-differences"],
+    "quant-finance": ["option", "derivative", "volatilit", "black-scholes", "risk"],
+
+    # Robotics and control-adjacent
+    "robotics": ["robot", "slam", "path planning", "manipulat", "kinematic", "navigation"],
 }
 
 
@@ -203,11 +265,59 @@ def _find_tags(text: str) -> List[str]:
     return present
 
 
+def _semantic_tags_if_enabled(text: str) -> List[str]:
+    """Compute semantic tags if SCA_USE_SEMANTIC is truthy; otherwise empty list.
+
+    Uses sentence-transformers via src.semantic if available. Falls back to empty on error.
+    """
+    use_semantic = (os.getenv("SCA_USE_SEMANTIC", "0").lower() in ("1", "true", "yes"))
+    if not use_semantic:
+        return []
+    # Try both package and module import styles
+    semantic_tags_for_text = None
+    try:
+        from .semantic import semantic_tags_for_text as _stft  # type: ignore
+        semantic_tags_for_text = _stft
+    except Exception:
+        try:
+            from semantic import semantic_tags_for_text as _stft  # type: ignore
+            semantic_tags_for_text = _stft
+        except Exception:
+            return []
+
+    try:
+        return semantic_tags_for_text(text, _SCIENCE_KEYWORDS)
+    except Exception:
+        # Any runtime error should not break the pipeline
+        return []
+
+
 def get_issue_tags(text: str) -> List[str]:
-    return _find_tags(text)
+    baseline = _find_tags(text)
+    semantic = _semantic_tags_if_enabled(text)
+    if not semantic:
+        return baseline
+    # Union while preserving order: prefer baseline tags first, then add unseen semantic tags
+    seen = set(baseline)
+    merged = list(baseline)
+    for tag in semantic:
+        if tag not in seen:
+            merged.append(tag)
+            seen.add(tag)
+    return merged
 
 
 def get_pr_tags(text: str) -> List[str]:
-    return _find_tags(text)
+    baseline = _find_tags(text)
+    semantic = _semantic_tags_if_enabled(text)
+    if not semantic:
+        return baseline
+    seen = set(baseline)
+    merged = list(baseline)
+    for tag in semantic:
+        if tag not in seen:
+            merged.append(tag)
+            seen.add(tag)
+    return merged
 
 

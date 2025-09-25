@@ -3,14 +3,24 @@ import pandas as pd
 from collections import Counter
 from typing import Dict, List
 
-from utils import (
-    get_issue_text,
-    get_issue_tags,
-    get_pr_text,
-    get_pr_tags,
-    get_all_repo_issues,
-    get_all_repo_prs,
-)
+try:
+    from .utils import (
+        get_issue_text,
+        get_issue_tags,
+        get_pr_text,
+        get_pr_tags,
+        get_all_repo_issues,
+        get_all_repo_prs,
+    )
+except ImportError:
+    from utils import (
+        get_issue_text,
+        get_issue_tags,
+        get_pr_text,
+        get_pr_tags,
+        get_all_repo_issues,
+        get_all_repo_prs,
+    )
 
 SEARCH_DELAY = float(os.getenv("GITHUB_SEARCH_DELAY", "1.5"))
 
@@ -95,8 +105,8 @@ def store_counts_per_year(owner: str, repo: str, year: int, data: Dict[str, Dict
         year: Year to store data for
         data: Dictionary with keys 'issues', 'prs', 'total' containing tag->count mappings
     """
-    # Create data directory if it doesn't exist
-    data_dir = "data"
+    # Create data directory under src/ to match existing repo layout
+    data_dir = os.path.join(os.path.dirname(__file__), "data")
     os.makedirs(data_dir, exist_ok=True)
 
     # Convert nested dictionary to long-format DataFrame
@@ -113,13 +123,17 @@ def store_counts_per_year(owner: str, repo: str, year: int, data: Dict[str, Dict
                     'count': count
                 })
 
-    if rows:  # Only create file if there's data
+    # Always write a CSV so downstream expects the file to exist
+    if rows:
         df = pd.DataFrame(rows)
-
-        # Create filename based on repository and year
         filename = f"{data_dir}/{owner}_{repo}_{year}_tag_counts.csv"
         df.to_csv(filename, index=False)
         print(f"  → Saved {len(rows)} rows to {filename}")
+    else:
+        df = pd.DataFrame(columns=['owner','repo','year','source_type','tag','count'])
+        filename = f"{data_dir}/{owner}_{repo}_{year}_tag_counts.csv"
+        df.to_csv(filename, index=False)
+        print(f"  → No tag matches for {year}. Wrote empty file to {filename}")
 
 
 def aggregate_all_to_datafile(owner: str, repo: str, start_year: int, end_year: int) -> None:
@@ -128,6 +142,14 @@ def aggregate_all_to_datafile(owner: str, repo: str, start_year: int, end_year: 
     for year, data in summary.items():
         print(f"Storing {owner}/{repo} for {year}...")
         store_counts_per_year(owner, repo, year, data)
+
+def aggregate_all_to_dataframe(owner: str, repo: str, start_year: int, end_year: int) -> pd.DataFrame:
+    """Aggregate tag counts for each year in [start_year, end_year] and return a DataFrame."""
+    summary = aggregate_range(owner, repo, start_year, end_year)
+    df = pd.DataFrame()
+    for year, data in summary.items():
+        df = df.append(data, ignore_index=True)
+    return df
 
 if __name__ == "__main__":
     # Configuration
@@ -141,7 +163,7 @@ if __name__ == "__main__":
     if os.getenv("SCA_CREATE_DATAFILES", "").lower() in ("1", "true", "yes"):
         print(f"Creating data files for {OWNER}/{REPO} from {START_YEAR} to {END_YEAR}")
         aggregate_all_to_datafile(OWNER, REPO, START_YEAR, END_YEAR)
-        print("Done! Check the 'data/' directory for CSV files.")
+        print("Done! Check the 'src/data/' directory for CSV files.")
     else:
         # Default: run single year analysis
         from pprint import pprint

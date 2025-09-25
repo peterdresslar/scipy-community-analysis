@@ -3,10 +3,21 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-from typing import Optional
+from typing import Optional, Dict
 import time
 import httpx
-from utils import get_github_client_with_timeout
+try:
+    # Package import (when used as python -m src.*)
+    from .utils import get_github_client_with_timeout
+except ImportError:
+    # Module import (when notebook adds src/ to sys.path)
+    from utils import get_github_client_with_timeout
+
+try:
+    from .main import aggregate_all_to_dataframe
+except ImportError:
+    from main import aggregate_all_to_dataframe
+from wordcloud import WordCloud
 
 # Initialize the GitHub client
 client = get_github_client_with_timeout()
@@ -298,3 +309,142 @@ def plot_yearly_trends(years_df: pd.DataFrame):
     plt.suptitle("SciPy year-by-year activity")
     plt.tight_layout()
     plt.show()
+
+
+def get_scipy_subfields_and_topics(start_year: int, end_year: int) -> pd.DataFrame:
+    """Get SciPy aboutness data using the functions in main.py
+    Args: start_year: int, end_year: int
+
+
+    Returns a DataFrame with the following columns:
+    - year
+    - subfields_for_prs
+    - subfields_for_issues
+    - subfields_for_all
+    - topics_for_prs
+    - topics_for_issues
+    - topics_for_all
+
+    The subfields_ and topics_ columns contain lists of subfields and topics (strings) per type of entity.
+    """
+    data = aggregate_all_to_dataframe("scipy", "scipy", start_year, end_year)
+    years_returned = data["year"].unique()
+    print(f"Years returned: {years_returned}")
+    return data
+
+
+# --- Tag counts visualization helpers ---
+
+def _load_year_tag_counts(owner: str, repo: str, year: int) -> pd.DataFrame:
+    data_dir = os.path.join(os.path.dirname(__file__), "data")
+    filename = os.path.join(data_dir, f"{owner}_{repo}_{year}_tag_counts.csv")
+    if not os.path.exists(filename):
+        print(f"No tag counts file found for {year}: {filename}")
+        return pd.DataFrame(columns=["owner", "repo", "year", "source_type", "tag", "count"])
+    try:
+        df = pd.read_csv(filename)
+        return df
+    except Exception as e:
+        print(f"Failed to read {filename}: {e}")
+        return pd.DataFrame(columns=["owner", "repo", "year", "source_type", "tag", "count"])
+
+
+def _get_tag_frequencies_for_year(
+    year: int,
+    *,
+    owner: str = "scipy",
+    repo: str = "scipy",
+    source_type: str = "total",
+) -> Dict[str, int]:
+    df = _load_year_tag_counts(owner, repo, year)
+    if df.empty:
+        return {}
+    # Prefer requested source_type; if missing, sum issues+prs
+    if source_type in set(df["source_type"].unique()):
+        sdf = df[df["source_type"] == source_type]
+    else:
+        sdf = df[df["source_type"].isin(["issues", "prs"])]
+    if sdf.empty:
+        return {}
+    grouped = sdf.groupby("tag")["count"].sum().sort_values(ascending=False)
+    return grouped.to_dict()
+
+
+def plot_wordcloud_for_year(
+    year: int,
+    *,
+    owner: str = "scipy",
+    repo: str = "scipy",
+    source_type: str = "total",
+    max_words: int = 200,
+    width: int = 1200,
+    height: int = 800,
+    background_color: str = "white",
+    colormap: str = "viridis",
+):
+    """Render a word cloud of topic frequencies for a given year.
+
+    Returns the matplotlib Axes.
+    """
+    freqs = _get_tag_frequencies_for_year(year, owner=owner, repo=repo, source_type=source_type)
+    if not freqs:
+        print(f"No frequencies to plot for {year} ({source_type}).")
+        return None
+    wc = WordCloud(
+        width=width,
+        height=height,
+        max_words=max_words,
+        background_color=background_color,
+        colormap=colormap,
+        prefer_horizontal=0.9,
+    )
+    wc.generate_from_frequencies(freqs)
+    fig, ax = plt.subplots(figsize=(width / 100, height / 100))
+    ax.imshow(wc, interpolation="bilinear")
+    ax.axis("off")
+    ax.set_title(f"SciPy topics word cloud – {year} ({source_type})")
+    plt.tight_layout()
+    plt.show()
+    return ax
+
+
+def plot_top_n_tags_for_year(
+    year: int,
+    *,
+    owner: str = "scipy",
+    repo: str = "scipy",
+    source_type: str = "total",
+    top_n: int = 25,
+    horizontal: bool = True,
+):
+    """Plot a bar chart of the top-N topics for a given year.
+
+    Returns the matplotlib Axes.
+    """
+    freqs = _get_tag_frequencies_for_year(year, owner=owner, repo=repo, source_type=source_type)
+    if not freqs:
+        print(f"No frequencies to plot for {year} ({source_type}).")
+        return None
+    items = list(freqs.items())[:top_n]
+    labels = [k for k, _ in items]
+    values = [v for _, v in items]
+
+    fig_w = 10 if not horizontal else 12
+    fig_h = 6 if not horizontal else max(6, int(len(items) * 0.4))
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+    if horizontal:
+        ax.barh(range(len(items)), values, color="tab:blue", alpha=0.8)
+        ax.set_yticks(range(len(items)))
+        ax.set_yticklabels(labels)
+        ax.invert_yaxis()
+        ax.set_xlabel("Count")
+    else:
+        ax.bar(range(len(items)), values, color="tab:blue", alpha=0.8)
+        ax.set_xticks(range(len(items)))
+        ax.set_xticklabels(labels, rotation=45, ha="right")
+        ax.set_ylabel("Count")
+    ax.set_title(f"Top {top_n} SciPy topics – {year} ({source_type})")
+    ax.grid(axis="x" if horizontal else "y", alpha=0.3, linestyle="--")
+    plt.tight_layout()
+    plt.show()
+    return ax
